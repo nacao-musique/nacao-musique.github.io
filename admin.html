@@ -400,6 +400,21 @@
         <button class="btn-submit" id="m-submit-btn" onclick="saveChantDuMois()">Sauvegarder</button>
         <div class="form-success" id="m-form-success">✓ Chant du mois enregistré !</div>
         <div class="form-error" id="m-form-error"></div>
+
+        <h2 style="margin-top:2rem;">Fiche du chant (PDF ou image)</h2>
+        <p class="form-hint">Un bouton « Fiche du chant » apparaît sur l'accueil. Envoyer une nouvelle fiche remplace l'ancienne.</p>
+        <div class="song-row" style="margin-bottom:1rem;">
+          <div class="song-row-info" id="f-fiche-actuelle"><span>Chargement...</span></div>
+          <button class="btn-delete" id="f-fiche-delete" style="display:none;" onclick="deleteFiche()">Supprimer la fiche</button>
+        </div>
+        <div class="form-row">
+          <div class="form-group full">
+            <input type="file" id="f-fiche" accept="application/pdf,image/jpeg,image/png,image/webp">
+          </div>
+        </div>
+        <button class="btn-submit" id="f-fiche-btn" onclick="uploadFiche()">Envoyer la fiche</button>
+        <div class="form-success" id="f-fiche-success">✓ Fiche envoyée !</div>
+        <div class="form-error" id="f-fiche-error"></div>
       </div>
 
       <div class="separator"></div>
@@ -624,6 +639,7 @@
     document.getElementById('admin-screen').style.display = 'block';
     document.getElementById('nav-user').textContent = session.user.email;
     loadPhotos();
+    loadFiche();
     loadPresentation();
     loadSongs();
     loadVideos();
@@ -814,6 +830,71 @@
     btn.disabled = false;
     if (error) { showMsg(errorEl, 'Erreur : ' + error.message); return; }
     showMsg(successEl);
+  }
+
+  // Fiche du chant du mois : fichier rangé dans le dossier "fiches/" du stockage "photos"
+  // (mêmes droits que les photos), référencé dans club_info.
+  let fiche = { url: '', path: '', nom: '' };
+
+  async function loadFiche() {
+    const { data } = await db.from('club_info').select('key, value')
+      .in('key', ['chant_du_mois_fiche_url', 'chant_du_mois_fiche_path', 'chant_du_mois_fiche_nom']);
+    const info = Object.fromEntries((data || []).map(r => [r.key, r.value || '']));
+    fiche = { url: info.chant_du_mois_fiche_url || '', path: info.chant_du_mois_fiche_path || '', nom: info.chant_du_mois_fiche_nom || '' };
+    document.getElementById('f-fiche-actuelle').innerHTML = fiche.url
+      ? `<strong>Fiche actuelle</strong><span><a href="${esc(fiche.url)}" target="_blank" rel="noopener">${esc(fiche.nom || 'Voir la fiche')}</a></span>`
+      : '<span>Aucune fiche pour l\'instant.</span>';
+    document.getElementById('f-fiche-delete').style.display = fiche.url ? '' : 'none';
+  }
+
+  function saveFicheInfo(url, path, nom) {
+    return db.from('club_info').upsert([
+      { key: 'chant_du_mois_fiche_url', value: url },
+      { key: 'chant_du_mois_fiche_path', value: path },
+      { key: 'chant_du_mois_fiche_nom', value: nom },
+    ]);
+  }
+
+  async function uploadFiche() {
+    const file = document.getElementById('f-fiche').files[0];
+    const successEl = document.getElementById('f-fiche-success');
+    const errorEl = document.getElementById('f-fiche-error');
+    const btn = document.getElementById('f-fiche-btn');
+    successEl.style.display = 'none';
+    errorEl.style.display = 'none';
+
+    if (!file) { showMsg(errorEl, 'Choisis un fichier PDF ou une image.'); return; }
+    const ext = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.type];
+    if (!ext) { showMsg(errorEl, 'Format non accepté : envoie un PDF, un JPG, un PNG ou un WEBP.'); return; }
+    if (file.size > 20 * 1024 * 1024) { showMsg(errorEl, 'Fichier trop lourd (20 Mo maximum).'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Envoi...';
+    const path = `fiches/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const up = await db.storage.from('photos').upload(path, file, { contentType: file.type });
+    let error = up.error;
+    if (!error) {
+      const url = db.storage.from('photos').getPublicUrl(path).data.publicUrl;
+      ({ error } = await saveFicheInfo(url, path, file.name));
+      if (error) await db.storage.from('photos').remove([path]);
+    }
+    btn.disabled = false;
+    btn.textContent = 'Envoyer la fiche';
+    if (error) { showMsg(errorEl, 'Erreur : ' + error.message); return; }
+
+    // l'ancienne fiche n'est plus utilisée : on libère la place
+    if (fiche.path) await db.storage.from('photos').remove([fiche.path]);
+    document.getElementById('f-fiche').value = '';
+    showMsg(successEl);
+    await loadFiche();
+  }
+
+  async function deleteFiche() {
+    if (!confirm('Supprimer la fiche du chant du mois ?')) return;
+    const { error } = await saveFicheInfo('', '', '');
+    if (error) { alert('Erreur : ' + error.message); return; }
+    if (fiche.path) await db.storage.from('photos').remove([fiche.path]);
+    await loadFiche();
   }
 
   // ---- PRÉSENTATION ----

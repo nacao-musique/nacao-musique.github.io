@@ -328,6 +328,7 @@
     padding: 1.5rem;
   }
   .chant-du-mois .video-base-badge { margin-bottom: 0.75rem; }
+  .chant-du-mois-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
   .chant-du-mois h3 { font-family: 'Bebas Neue', cursive; font-size: 1.8rem; letter-spacing: 1px; line-height: 1.1; }
   .chant-du-mois .music-meta { color: rgba(255,255,255,0.7); margin: 0.25rem 0 0.75rem; }
   .chant-du-mois blockquote {
@@ -1432,12 +1433,14 @@ function carouselGo(i) {
 
 // Présentation du groupe et chant du mois (table club_info)
 let chantDuMoisId = null;
+let chantDuMoisFiche = '';  // PDF ou image envoyé dans l'admin
 
 async function loadClubInfo() {
   const { data, error } = await db.from('club_info').select('*');
   if (error) { console.error('Erreur chargement infos club:', error); return; }
   const info = Object.fromEntries(data.map(r => [r.key, r.value]));
   chantDuMoisId = Number(info.chant_du_mois) || null;
+  chantDuMoisFiche = /^https:\/\//.test(info.chant_du_mois_fiche_url || '') ? info.chant_du_mois_fiche_url : '';
   renderChantDuMois();
   if (!info.presentation || !info.presentation.trim()) return;
   document.getElementById('presentation-text').innerHTML = formatText(info.presentation);
@@ -1460,7 +1463,10 @@ function renderChantDuMois() {
     <h3>${esc(s.title)}</h3>
     <div class="music-meta"><span class="genre-tag ${tagClass}">${tagLabel}</span> ${esc(s.meta)}</div>
     ${preview ? `<blockquote>${preview}…</blockquote>` : ''}
-    <button class="btn-primary" onclick="openLyrics(${s.id})">Voir les paroles</button>`;
+    <div class="chant-du-mois-actions">
+      <button class="btn-primary" onclick="openLyrics(${s.id})">Voir les paroles</button>
+      ${chantDuMoisFiche ? `<a class="btn-outline" href="${esc(chantDuMoisFiche)}" target="_blank" rel="noopener">${/\.pdf$/i.test(chantDuMoisFiche) ? '📄' : '🖼️'} Fiche du chant</a>` : ''}
+    </div>`;
   el.style.display = '';
   updateHomeGrid();
 }
