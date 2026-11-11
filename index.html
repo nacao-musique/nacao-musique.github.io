@@ -1134,8 +1134,7 @@ function openLyrics(id) {
   
   const videoSection = document.getElementById('lyrics-modal-video');
   if (song.videoUrl) {
-    const ytMatch = song.videoUrl.match(/(?:youtu\.be\/|watch\?v=|embed\/)([^#&?]{11})/);
-    const ytId = ytMatch ? ytMatch[1] : null;
+    const ytId = getYoutubeId(song.videoUrl);
     videoSection.style.display = 'block';
     videoSection.innerHTML = ytId ? `
       <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:8px;margin-bottom:1rem;">
@@ -1185,8 +1184,9 @@ function setInstrumentTab(instrument, btn) {
   renderVideos();
 }
 
+// Accepte youtu.be/ID, watch?v=ID, embed/ID, shorts/ID et live/ID
 function getYoutubeId(url) {
-  const match = url.match(/(?:youtu\.be\/|watch\?v=|embed\/)([^#&?]{11})/);
+  const match = (url || '').match(/(?:youtu\.be\/|[?&]v=|embed\/|shorts\/|live\/)([\w-]{11})/);
   return match ? match[1] : null;
 }
 
